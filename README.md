@@ -1,2 +1,2 @@
-# medimate
-The codebase for the MediMate - The medication dispenser of the future.
+# MediMate
+This repo contains the codebase for the MediMate medication dispenser.
