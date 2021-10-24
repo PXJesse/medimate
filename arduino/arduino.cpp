@@ -1,3 +1,4 @@
+#include <StackArray.h>
 #include <ServoTimer2.h>
 #include <PCM.h>
 
@@ -13,6 +14,29 @@ const int SERVO_TWO_PIN = 11;
 
 ServoTimer2 servo_one;
 ServoTimer2 servo_two;
+
+// The medication schedule, where the top item (schedule[0]) is the nearest datetime in unix format
+// This data is pre-compiled by an external system which gives the correct array length and sorts the items
+const long int scheduleData[5] = {
+  1635087600, // 2021-10-24, 17:00:00
+  1635159600, // 2021-10-25, 13:00:00
+  1635174000, // 2021-10-25, 17:00:00
+  1635246000, // 2021-10-26, 13:00:00
+  1635260400 // 2021-10-26, 17:00:00
+};
+
+const String scheduleDataAttributes[5] = {
+  "1-5", // Container 1, dispense 5 pills
+  "1-1", // Container 1, dispense 1 pill
+  "1-2", // Container 1, dispense 2 pills
+  "1-1", // Container 1, dispense 1 pill
+  "1-2" // Container 1, dispense 2 pills
+};
+
+const int scheduleDataSize = 4;
+
+StackArray<long int> schedule;
+StackArray<String> scheduleAttributes;
 
 // Audio data
 const unsigned char softChime[] PROGMEM = {
@@ -34,6 +58,24 @@ void setup() {
 
   // Set up serial monitor
   Serial.begin(9600);
+
+  // Init schedule
+  for (int i = scheduleDataSize - 1; i >= 0; --i) {
+    Serial.print("Pushing schedule data point ");
+    Serial.print(i);
+    Serial.print(": ");
+    Serial.println(scheduleData[i]);
+    schedule.push(scheduleData[i]);
+  }
+
+  // Init schedule attributes
+  for (int j = scheduleDataSize - 1; j >= 0; --j) {
+    Serial.print("Pushing schedule attribute data point ");
+    Serial.print(j);
+    Serial.print(": ");
+    Serial.println(scheduleDataAttributes[j]);
+    scheduleAttributes.push(scheduleDataAttributes[j]);
+  }
 
   // Play a test tune on the speaker
   startPlayback(softChime, sizeof(softChime));
@@ -59,6 +101,35 @@ void loop() {
   // Rotate both servos
   rotateServoCont(servo_one);
   rotateServoCont(servo_two);
+
+  // Check if any medication needs to be dispensed
+  const long int nextMed = schedule.peek();
+  const long int currentTime = 1635096056; // TODO: Replace by current unix
+  
+  if (nextMed <= currentTime) {
+    // The next medication dispensing time has passed, dispense the correct medicine
+    // Pop the med from the schedule to prevent dispensing it multiple times
+    const long int nextMedPopped = schedule.pop();
+
+    // Fetch the medicine data (what medicine to dispense, how much of it)
+    const String nextMedData = scheduleAttributes.pop();
+    const int container = nextMedData.substring(0,1).toInt();
+    const int amount = nextMedData.substring(2).toInt();
+
+    Serial.print("Dispensing ");
+    Serial.print(amount);
+    Serial.print(" pill");
+    if (amount > 1) { Serial.print("s"); }
+    Serial.print(" from container ");
+    Serial.print(container);
+    Serial.println("...");
+    
+  } else {
+    // The next medication dispensing time has not yet come
+    Serial.println("Medicine not yet ready to be dispensed!");
+  }
+
+  delay(1000);
 }
 
 
@@ -97,7 +168,7 @@ void rotateServoCont(ServoTimer2 servo) {
   // Attach servos to PWM generator
   servo_one.attach(SERVO_ONE_PIN);
   servo_two.attach(SERVO_TWO_PIN);
-  delay(1000);
+  delay(100);
   
   // Let the servo turn at a speed of 100 for 2260ms
   servo.write(100);
@@ -105,12 +176,12 @@ void rotateServoCont(ServoTimer2 servo) {
 
   // Stop the servo from rotating (90 is neutral)
   servo.write(90);
-  delay(2000);
+  delay(1000);
 
   // Detach servos from PWM generator
   servo_one.detach();
   servo_two.detach();
-  delay(1000);
+  delay(100);
 
   Serial.println("Finished rotating servo!");
 }
