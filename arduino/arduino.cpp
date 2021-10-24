@@ -1,6 +1,7 @@
 #include <StackArray.h>
 #include <ServoTimer2.h>
 #include <PCM.h>
+#include <TimeLib.h>
 
 // Pin definitions
 const int STOCK_LED_PIN_1 = 8;
@@ -47,6 +48,54 @@ const unsigned char softChime[] PROGMEM = {
 // Setup and loop
 // --------------------------
 void setup() {
+  // Set up serial monitor
+  Serial.begin(9600);
+  
+  // Set Arduino time to the sketch compilation time (BIG CAVEAT: If the Arduino is powered by an external power source and the program is started without uploading from a computer, the compilation time is not updated and it won't give the right DateTime).
+  String d = (String) __DATE__;
+  String t = (String) __TIME__;
+
+  // Construct date components
+  int days = d.substring(4, 6).toInt();
+  int months = monthNumByName(d.substring(0, 3));
+  int years = d.substring(7, 11).toInt();
+
+  // Construct time components
+  int hours = t.substring(0, 2).toInt() - 2; // Unix timestamps are aligned to GMT, so subtract 2 for the Dutch timezone
+  int minutes = t.substring(3, 5).toInt();
+  int seconds = t.substring(6, 8).toInt() + 5; // For this to not be behind by about 5 seconds, start the Arduino without compilation and uploading
+
+  // Adjust for timezone differences and negative values
+  if (hours == -2) {
+    hours = 22;
+    days--;
+    
+    if (days == -1) {
+      days = 0;
+      months--;
+      if (months == -1) {
+        months = 0;
+        years--;
+      }
+    }
+  } else if (hours == -1) {
+    hours = 23;
+    days--;
+
+    if (days == -1) {
+      days = 0;
+      months--;
+      if (months == -1) {
+        months = 0;
+        years--;
+      }
+    }
+  }
+
+  // Set the time
+  setTime(hours, minutes, seconds, days, months, years);
+  printDateTime(hours, minutes, seconds, days, months, years);
+  
   // Set LED pins to output mode
   pinMode(STOCK_LED_PIN_1, OUTPUT);
   pinMode(STOCK_LED_PIN_2, OUTPUT);
@@ -55,9 +104,6 @@ void setup() {
   // Set up UDS pins
   pinMode(UDS_TRIG_PIN, OUTPUT);
   pinMode(UDS_ECHO_PIN, INPUT);
-
-  // Set up serial monitor
-  Serial.begin(9600);
 
   // Init schedule
   for (int i = scheduleDataSize - 1; i >= 0; --i) {
@@ -88,6 +134,11 @@ void setup() {
 void loop() {
   Serial.println("Looping!");
 
+  // Manage timing
+  time_t t = now();
+  Serial.print("Current time: ");
+  Serial.println(t);
+
   // Turn on both stock indicator LEDs
   digitalWrite(STOCK_LED_PIN_1, HIGH);
   digitalWrite(STOCK_LED_PIN_2, HIGH);
@@ -103,12 +154,12 @@ void loop() {
   rotateServoCont(servo_two);
 
   // Check if any medication needs to be dispensed
+  // Pop top of schedule for comparison
   const long int nextMed = schedule.peek();
-  const long int currentTime = 1635096056; // TODO: Replace by current unix
-  
+  const long int currentTime = t; // Replace by current unix
   if (nextMed <= currentTime) {
     // The next medication dispensing time has passed, dispense the correct medicine
-    // Pop the med from the schedule to prevent dispensing it multiple times
+    // Pop the med from the schedule
     const long int nextMedPopped = schedule.pop();
 
     // Fetch the medicine data (what medicine to dispense, how much of it)
@@ -184,4 +235,50 @@ void rotateServoCont(ServoTimer2 servo) {
   delay(100);
 
   Serial.println("Finished rotating servo!");
+}
+
+int monthNumByName(String m) {
+  if (m == "Jan") {
+    return 1;
+  } else if (m == "Feb") {
+    return 2;
+  } else if (m == "Mar") {
+    return 3;
+  } else if (m == "Apr") {
+    return 4;
+  } else if (m == "May") {
+    return 5;
+  } else if (m == "Jun") {
+    return 6;
+  } else if (m == "Jul") {
+    return 7;
+  } else if (m == "Aug") {
+    return 8;
+  } else if (m == "Sep") {
+    return 9;
+  } else if (m == "Oct") {
+    return 10;
+  } else if (m == "Nov") {
+    return 11;
+  } else if (m == "Dec") {
+    return 12;
+  }
+}
+
+void printDateTime(int hours, int minutes, int seconds, int days, int months, int years) {
+  Serial.print("\\");
+  Serial.print(hours);
+  Serial.print("\\");
+  Serial.print(minutes);
+  Serial.print("\\");
+  Serial.print(seconds);
+  Serial.println("\\");
+
+  Serial.print("\\");
+  Serial.print(days);
+  Serial.print("\\");
+  Serial.print(months);
+  Serial.print("\\");
+  Serial.print(years);
+  Serial.println("\\");
 }
