@@ -34,7 +34,7 @@ const String scheduleDataAttributes[5] = {
   "1-2" // Container 1, dispense 2 pills
 };
 
-const int scheduleDataSize = 4;
+const int scheduleDataSize = 5;
 
 StackArray<long int> schedule;
 StackArray<String> scheduleAttributes;
